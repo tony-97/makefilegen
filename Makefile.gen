@@ -1,11 +1,11 @@
 # Archive maintaining program
-AR := ar
+AR ?= ar
 
 # Flags to give archive-maintaining program
-ARFLAGS := -crs
+ARFLAGS ?= -crs
 
-# Generate object indexes
-RANLIB := ranlib
+# Generate object indices
+RANLIB ?= ranlib
 
 # C compiler
 CC ?= gcc
@@ -14,12 +14,12 @@ CC ?= gcc
 CXX ?= g++
 
 # Linker
-LD := $(CXX)
+LD ?= $(CXX)
 
 # All warning flags
 WFLAGS := -W -Wall -Wextra -Wpedantic -pedantic $(WFLAGS)
 
-# Pre processor flags
+# Preprocessor flags
 CPPFLAGS +=
 
 # Flags to pass to the C compiler
@@ -34,17 +34,18 @@ LDFLAGS +=
 # Libs names for the linker
 LDLIBS +=
 
-# Program for create a directory if not exist
+# Program to create a directory if does not exist
 MKDIR ?= mkdir -p $1
 
-# Program for remove a file
+# Program to remove a file
 REMOVE ?= rm -fR $1
 
-# C++ sources to exclude
-OUT_SRC_CXX ?=
+# sources to include
+INCLUDE_SRCS_CXX ?=
+INCLUDE_SRCS_C ?=
 
-# C sources to exclude
-OUT_SRC_C ?= 
+# sources to exclude
+EXCLUDE_SRCS ?=
 
 #==============================================================================
 # Compile only macro
@@ -74,7 +75,7 @@ $(1) : $(2) $(DEPS_DIRS)
 endef
 
 #==============================================================================
-# Replace $(SRC_DIR) path to $(OBJ_DIR)
+# Changes $(SRC_DIR) path to $(OBJ_DIR)
 #==============================================================================
 # $(1) : Source file with full path
 define SOURCE_PATH_2_OBJ
@@ -90,7 +91,7 @@ $(patsubst $(SRC_DIR)%,$(DEP_DIR)%,$(1))
 endef
 
 #==============================================================================
-# Replace source file with his respective include file
+# Replace source file with its respective include file
 #==============================================================================
 # $(1) : Full source filename
 define SOURCES_2_INCLUDE
@@ -98,7 +99,7 @@ $(wildcard $(subst .c,.h,$(subst .cc,.hh,$(subst .cxx,.hxx,$(subst .cpp,.hpp,$(1
 endef
 
 #==============================================================================
-# Replaces srcs extension with .c.o .cc.o 
+# Replaces srcs file extension with .c.o .cc.o 
 #==============================================================================
 # $(1) : Full source filename
 define CXXSOURCES_2_OBJS
@@ -110,7 +111,7 @@ $(call SOURCE_PATH_2_OBJ,$(subst .c,.c.o,$(1)))
 endef
 
 #==============================================================================
-# Replaces srcs extension with .d 
+# Replaces srcs file extension with .d 
 #==============================================================================
 # $(1) : Full source filename
 define CXXSOURCES_2_DEPS
@@ -122,7 +123,7 @@ $(call SOURCE_PATH_2_DEP,$(subst .c,.c.o,$(1)))
 endef
 
 #==============================================================================
-# Find sources files on a folder with the given pattern
+# Find sources files in a folder with the given pattern
 #==============================================================================
 # $(1) : Paths for search sources
 # $(2) : Paterns to search
@@ -130,7 +131,7 @@ endef
 # $(shell find $(1) -type f -iname $(2))
 FIND = $(foreach d,$(wildcard $(1:=/*)),$(call FIND,$d,$2) $(filter $(subst *,%,$2),$d))
 
-# The path where put the executable and the library
+# The path where to put the executable and the library
 BUILD_PATH ?= .
 
 # Name for the library
@@ -152,9 +153,8 @@ ROOT_PATH ?= $(BUILD_PATH)
 DEP_DIR ?= $(ROOT_PATH)/deps
 
 # Sources to compile
-SRCS_CXX := $(filter-out $(OUT_SRC_CXX),$(call FIND,$(SRC_DIR),*.cpp *.cc *.cxx))
-SRCS_C   := $(filter-out $(OUT_SRC_C),$(call FIND,$(SRC_DIR),*.c))
-SRCS     := $(SRCS_CXX) $(SRCS_C)
+SRCS_CXX := $(filter-out $(EXCLUDE_SRCS),$(call FIND,$(SRC_DIR),*.cpp *.cc *.cxx)) $(INCLUDE_SRCS_CXX)
+SRCS_C   := $(filter-out $(EXCLUDE_SRCS),$(call FIND,$(SRC_DIR),*.c)) $(INCLUDE_SRCS_C)
 
 # Sources converted to object file
 OBJS_CXX := $(call CXXSOURCES_2_OBJS,$(SRCS_CXX))
@@ -169,10 +169,10 @@ DEPS := $(call CXXSOURCES_2_DEPS,$(SRCS_CXX)) $(call CSOURCES_2_DEPS,$(SRCS_C))
 # SRCS_DIRS := $(shell find $(SRC_DIR)/ -type d)
 SRCS_DIRS := $(sort $(dir $(call FIND,$(SRC_DIR),*.cpp *.hpp *.cc *.hh *.cxx *.c *.h)))
 
-# Objects directories same structure as src dir
+# Objects directories with the same structure as src dir
 OBJS_DIRS := $(call SOURCE_PATH_2_OBJ,$(SRCS_DIRS))
 
-# Deps directories same structure as src dir
+# Deps directories with the same structure as src dir
 DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 
 .PHONY: clean cleanall info
