@@ -1,0 +1,117 @@
+ifdef PLATFORM_HOST_WINDOWS
+    export MKDIR  = if not exist $(1) mkdir $(1)
+    export REMOVE = rmdir /s /q $(1)
+endif
+
+ifdef MSVC
+    export WFLAGS := /Wall
+else
+    AFLAGS := -fsanitize=undefined -fno-omit-frame-pointer
+    ifdef CLANG
+        AFLAGS += -fsanitize=nullability
+    endif
+ifeq ($(MEMORY),1)
+	AFLAGS += -fsanitize=memory -fPIE -pie -fsanitize-memory-track-origins
+else
+	AFLAGS += -fsanitize=address -fsanitize-address-use-after-scope
+endif
+endif
+
+VGFLAGS := -s --leak-check=full --show-leak-kinds=all --track-origins=yes
+
+BUILD_DIR ?= build
+BUILD_MODE_PATH = $(BUILD_DIR)/$(BUILD_NAME)
+
+ifeq ($(BUILD_MODE),RELEASE)
+	BUILD_NAME := release
+	CXXFLAGS   += $(RELEASE_FLAGS)
+	CFLAGS     += $(RELEASE_FLAGS)
+else
+	BUILD_NAME := debug
+	CXXFLAGS   += $(DEBUG_FLAGS)
+	CFLAGS     += $(DEBUG_FLAGS)
+ifndef MSVC
+	WFLAGS += -Wno-unused-parameter
+endif
+ifeq ($(ASAN),1)
+	ASAN_OPTIONS := strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1
+	LDFLAGS  += $(AFLAGS)
+	CXXFLAGS += $(AFLAGS)
+	CFLAGS += $(AFLAGS)
+ifeq ($(MEMORY),1)
+	BUILD_NAME := $(BUILD_NAME)_msan
+else
+	BUILD_NAME := $(BUILD_NAME)_asan
+endif
+endif
+endif
+
+export CPPFLAGS
+export CXXFLAGS
+export CFLAGS
+export LDFLAGS
+export LDLIBS
+export WFLAGS
+export OBJ_DIR    := $(BUILD_MODE_PATH)/obj
+export BUILD_PATH := $(BUILD_MODE_PATH)
+export ROOT_PATH  := $(BUILD_DIR)
+
+EXEC_FILE := $(BUILD_MODE_PATH)/$(EXEC_NAME)
+
+EXEC_PID = $(shell pidof $(EXEC_FILE))
+
+.PHONY: all info clean cleanall
+
+all:
+	$(MAKE) -f Makefile.generic all
+
+lib:
+	$(MAKE) -f Makefile.generic lib
+
+run: all
+ifeq ($(VALGRIND),1)
+ifeq ($(ASAN),1)
+	$(error "valgrind can't run with asan")
+else
+	valgrind $(VGFLAGS) $(EXEC_FILE)
+endif
+else
+	$(EXEC_FILE)
+endif
+
+run_cgdb: all
+ifeq ($(ASAN),1)
+	(ASAN_OPTIONS=sleep_before_dying=10:sleep_after_init=10 $(EXEC_FILE) > /dev/null 2>&1 &)
+	sleep 5
+	sudo cgdb -- -q -p $(shell pidof $(EXEC_FILE))
+else
+ifeq ($(VALGRIND),1)
+	valgrind $(VGFLAGS) --vgdb=yes --vgdb-error=0 $(EXEC_FILE)
+else
+	cgdb $(EXEC_FILE)
+endif
+endif
+
+info:
+	$(info [INFO] MEMORY    : $(MEMORY))
+	$(info [INFO] ASAN      : $(ASAN))
+	$(info [INFO] VALGRIND  : $(VALGRIND))
+	$(info [INFO] AFLAGS    : $(AFLAGS))
+	$(info [INFO] VGFLAGS   : $(VGFLAGS))
+	$(info [INFO] BUILD_PATH: $(BUILD_MODE_PATH))
+	$(info [INFO] BUILD_NAME: $(BUILD_NAME))
+	$(info [INFO] EMSCRIPTEN: $(EMSCRIPTEN))
+	$(info [INFO] MSVC      : $(MSVC))
+	$(info [INFO] CLANG     : $(CLANG))
+	$(info [INFO] GCC       : $(GCC))
+	$(info [INFO] CL        : $(CL))
+	$(info )
+	$(info =====SUB MAKE INFO=====)
+	$(info )
+	$(MAKE) -s -f Makefile.generic info
+
+clean:
+	$(MAKE) -f Makefile.generic clean
+
+cleanall:
+	$(MAKE) -f Makefile.generic cleanall
