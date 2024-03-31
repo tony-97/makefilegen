@@ -8,9 +8,9 @@ EXTRA_SRCS_CXX ?=
 EXTRA_SRCS_C   ?=
 EXCLUDE_SRCS   ?=
 
-INCLUDE_DIRS += . /home
-LIBS_PATH    += . /home
-DEFINES      += PLATFORM_DESKTOP
+INCLUDE_DIRS +=
+LIBS_PATH    +=
+DEFINES      +=
 
 # Compilation flags
 ifeq ($(TARGET),WEB)
