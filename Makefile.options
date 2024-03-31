@@ -1,20 +1,13 @@
-ifdef PLATFORM_HOST_WINDOWS
-    export MKDIR  = if not exist $(1) mkdir $(1)
-    export REMOVE = rmdir /s /q $(1)
-endif
-
-ifdef MSVC
-    export WFLAGS := /Wall
-else
+ifndef MSVC
     AFLAGS := -fsanitize=undefined -fno-omit-frame-pointer
     ifdef CLANG
         AFLAGS += -fsanitize=nullability
     endif
-ifeq ($(MEMORY),1)
-	AFLAGS += -fsanitize=memory -fPIE -pie -fsanitize-memory-track-origins
-else
-	AFLAGS += -fsanitize=address -fsanitize-address-use-after-scope
-endif
+    ifeq ($(MEMORY),1)
+        AFLAGS += -fsanitize=memory -fPIE -pie -fsanitize-memory-track-origins
+    else
+        AFLAGS += -fsanitize=address -fsanitize-address-use-after-scope
+    endif
 endif
 
 VGFLAGS := -s --leak-check=full --show-leak-kinds=all --track-origins=yes
@@ -63,10 +56,10 @@ EXEC_PID = $(shell pidof $(EXEC_FILE))
 .PHONY: all info clean cleanall
 
 all:
-	$(MAKE) -f Makefile.generic all
+	$(MAKE) -f Makefile.rules all
 
 lib:
-	$(MAKE) -f Makefile.generic lib
+	$(MAKE) -f Makefile.rules lib
 
 run: all
 ifeq ($(VALGRIND),1)
@@ -108,10 +101,10 @@ info:
 	$(info )
 	$(info =====SUB MAKE INFO=====)
 	$(info )
-	$(MAKE) -s -f Makefile.generic info
+	$(MAKE) -s -f Makefile.rules info
 
 clean:
-	$(MAKE) -f Makefile.generic clean
+	$(MAKE) -f Makefile.rules clean
 
 cleanall:
-	$(MAKE) -f Makefile.generic cleanall
+	$(MAKE) -f Makefile.rules cleanall

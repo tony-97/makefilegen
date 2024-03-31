@@ -3,11 +3,17 @@ include Makefile.vars
 EXEC_NAME := app
 LIB_NAME := mylib
 
+SRC_DIR        ?= src
+EXTRA_SRCS_CXX ?=
+EXTRA_SRCS_C   ?=
+EXCLUDE_SRCS   ?=
+
+INCLUDE_DIRS += . /home
+LIBS_PATH    += . /home
+DEFINES      += PLATFORM_DESKTOP
+
 # Compilation flags
 ifeq ($(TARGET),WEB)
-    AR  := emar
-    CC  := emcc
-    CXX := em++
     LDLIBS   += 
     LDFLAGS  += 
     DEBUG_FLAGS   += 
