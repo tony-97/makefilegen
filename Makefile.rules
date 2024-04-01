@@ -31,6 +31,15 @@ $(1) : $(2)
 endef
 
 #==============================================================================
+# Create directory
+#==============================================================================
+# $(1) : Directory to be create
+define CREATE_DIR
+$(1) :
+	$(call MKDIR,$(1))
+endef
+
+#==============================================================================
 # Generate deps
 #==============================================================================
 # $(1) : Deps to output
@@ -40,7 +49,7 @@ endef
 # $(5) : Compiler preprocessor flags
 # $(6) : Compiler flags
 define MK_DEPS
-$(1) : $(2) $(DEPS_DIRS)
+$(1) : $(2)
 	$(call MK_DEPS_IMPL,$(4),$(2),$(3),$(1),$(5),$(6))
 endef
 
@@ -58,14 +67,6 @@ endef
 # $(1) : Source file with full path
 define SOURCE_PATH_2_DEP
 $(patsubst $(SRC_DIR)%,$(DEP_DIR)%,$(1))
-endef
-
-#==============================================================================
-# Replace source file with its respective include file
-#==============================================================================
-# $(1) : Full source filename
-define SOURCES_2_INCLUDE
-$(wildcard $(subst .c,.h,$(subst .cc,.hh,$(subst .cxx,.hxx,$(subst .cpp,.hpp,$(1))))))
 endef
 
 #==============================================================================
@@ -89,7 +90,7 @@ $(call SOURCE_PATH_2_DEP,\
 $(subst .cpp,.cc.d,$(subst .cxx,.cc.d,$(subst .cc,.cc.d,$(1)))))
 endef
 define CSOURCES_2_DEPS
-$(call SOURCE_PATH_2_DEP,$(subst .c,.c.o,$(1)))
+$(call SOURCE_PATH_2_DEP,$(subst .c,.c.d,$(1)))
 endef
 
 #==============================================================================
@@ -137,7 +138,8 @@ DEPS := $(call CXXSOURCES_2_DEPS,$(SRCS_CXX)) $(call CSOURCES_2_DEPS,$(SRCS_C))
 # Sources directorie tree
 # old implementation
 # SRCS_DIRS := $(shell find $(SRC_DIR)/ -type d)
-SRCS_DIRS := $(sort $(dir $(call FIND,$(SRC_DIR),*.cpp *.hpp *.cc *.hh *.cxx *.c *.h)))
+#SRCS_DIRS := $(sort $(dir $(call FIND,$(SRC_DIR),*.cpp *.hpp *.cc *.hh *.cxx *.c *.h)))
+SRCS_DIRS := $(sort $(dir $(call FIND,$(SRC_DIR),*.cpp *.cc *.cxx *.c)))
 
 # Objects directories with the same structure as src dir
 OBJS_DIRS := $(call SOURCE_PATH_2_OBJ,$(SRCS_DIRS))
@@ -150,21 +152,21 @@ DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 $(BUILD_PATH):
 	$(call MKDIR,$(BUILD_PATH))
 
-$(OBJS_DIRS): $(BUILD_PATH)
-	$(call MKDIR,$(OBJS_DIRS))
-
-$(DEPS_DIRS):
-	$(call MKDIR,$(DEPS_DIRS))
-
 all: $(BUILD_PATH)/$(EXEC_NAME)
 
 lib: $(BUILD_PATH)/lib$(LIB_NAME).a
 
-$(BUILD_PATH)/$(EXEC_NAME): $(OBJS_DIRS) $(OBJS)
+$(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
+$(DEPS): | $(BUILD_PATH) $(DEPS_DIRS)
+
+$(BUILD_PATH)/$(EXEC_NAME): $(OBJS) $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
-$(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS_DIRS) $(OBJS)
+$(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS) $(DEPS)
 	$(call MK_LIB,$(AR),$(ARFLAGS),$@,$(OBJS))
+
+$(foreach O_DIR,$(OBJS_DIRS),$(eval $(call CREATE_DIR,$(O_DIR))))
+$(foreach D_DIR,$(DEPS_DIRS),$(eval $(call CREATE_DIR,$(D_DIR))))
 
 $(foreach CXX_FILE,$(SRCS_CXX),\
 $(eval \
