@@ -156,9 +156,6 @@ all: $(BUILD_PATH)/$(EXEC_NAME)
 
 lib: $(BUILD_PATH)/lib$(LIB_NAME).a
 
-$(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
-$(DEPS): | $(BUILD_PATH) $(DEPS_DIRS)
-
 $(BUILD_PATH)/$(EXEC_NAME): $(OBJS) $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
@@ -177,18 +174,6 @@ $(foreach C_FILE,$(SRCS_C),\
 $(eval \
 $(call COMPILE_ONLY,$(call CSOURCES_2_OBJS,$(C_FILE)),\
 $(C_FILE),$(CC),$(CPPFLAGS),$(CFLAGS))))
-
--include $(DEPS)
-
-$(foreach CXX_FILE,$(SRCS_CXX),\
-$(eval \
-$(call MK_DEPS,$(call CXXSOURCES_2_DEPS,$(CXX_FILE)),\
-$(CXX_FILE),$(call CXXSOURCES_2_OBJS,$(CXX_FILE)),$(CXX),$(CPPFLAGS),$(CXXFLAGS))))
-
-$(foreach C_FILE,$(SRCS_C),\
-$(eval \
-$(call MK_DEPS,$(call CSOURCES_2_DEPS,$(C_FILE)),\
-$(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
 
 info:
 	$(info [INFO] AR: $(AR))
@@ -215,3 +200,18 @@ clean:
 cleanall: clean
 	$(call REMOVE,$(BUILD_PATH)/$(EXEC_NAME))
 	$(call REMOVE,$(DEPS_DIRS))
+
+#-include $(DEPS)
+
+$(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
+$(DEPS): | $(BUILD_PATH) $(DEPS_DIRS)
+
+$(foreach CXX_FILE,$(SRCS_CXX),\
+$(eval \
+$(call MK_DEPS,$(call CXXSOURCES_2_DEPS,$(CXX_FILE)),\
+$(CXX_FILE),$(call CXXSOURCES_2_OBJS,$(CXX_FILE)),$(CXX),$(CPPFLAGS),$(CXXFLAGS))))
+
+$(foreach C_FILE,$(SRCS_C),\
+$(eval \
+$(call MK_DEPS,$(call CSOURCES_2_DEPS,$(C_FILE)),\
+$(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
