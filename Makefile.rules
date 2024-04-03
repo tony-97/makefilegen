@@ -1,3 +1,5 @@
+-include $(DEPS)
+
 # Flags to pass to the C compiler
 CFLAGS += $(WFLAGS)
 
@@ -201,8 +203,6 @@ cleanall: clean
 	$(call REMOVE,$(BUILD_PATH)/$(EXEC_NAME))
 	$(call REMOVE,$(DEPS_DIRS))
 
-#-include $(DEPS)
-
 $(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
 $(DEPS): | $(BUILD_PATH) $(DEPS_DIRS)
 
@@ -215,3 +215,4 @@ $(foreach C_FILE,$(SRCS_C),\
 $(eval \
 $(call MK_DEPS,$(call CSOURCES_2_DEPS,$(C_FILE)),\
 $(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
+
