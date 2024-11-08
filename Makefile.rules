@@ -38,7 +38,7 @@ endef
 # $(1) : Directory to be create
 define CREATE_DIR
 $(1) :
-	$(call MKDIR,$(1))
+	$(call MAKEDIR,$(1))
 endef
 
 #==============================================================================
@@ -152,7 +152,7 @@ DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 .PHONY: clean cleanall info
 
 $(BUILD_PATH):
-	$(call MKDIR,$(BUILD_PATH))
+	$(call MAKEDIR,$(BUILD_PATH))
 
 all: $(BUILD_PATH)/$(EXEC_NAME)
 
