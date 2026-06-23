@@ -80,28 +80,28 @@ endif
 
 export
 
-.PHONY: all run run_cgdb info clean cleanall
+.PHONY: all lib run run_cgdb info clean cleanall
 
 all:
-	$(MAKE) -f Makefile.options all
+	$(MAKE) -f Makefile.rules all
 
 lib:
-	$(MAKE) -f Makefile.options lib
+	$(MAKE) -f Makefile.rules lib
 
 run:
-	$(MAKE) -f Makefile.options run
+	$(MAKE) -f Makefile.rules run
 
 run_valgrind:
-	$(MAKE) -f Makefile.options run_valgrind
+	$(MAKE) -f Makefile.rules run_valgrind
 
 run_cgdb:
-	$(MAKE) -f Makefile.options run_cgdb
+	$(MAKE) -f Makefile.rules run_cgdb
 
 info:
-	$(MAKE) -f Makefile.options info
+	$(MAKE) -f Makefile.rules info
 
 clean:
-	$(MAKE) -f Makefile.options clean
+	$(MAKE) -f Makefile.rules clean
 
 cleanall:
-	$(MAKE) -f Makefile.options cleanall
+	$(MAKE) -f Makefile.rules cleanall

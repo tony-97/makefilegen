@@ -149,7 +149,7 @@ OBJS_DIRS := $(call SOURCE_PATH_2_OBJ,$(SRCS_DIRS))
 # Deps directories with the same structure as src dir
 DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 
-.PHONY: clean cleanall info
+.PHONY: clean cleanall info run run_valgrind run_cgdb
 
 $(BUILD_PATH):
 	$(call MAKEDIR,$(BUILD_PATH))
@@ -158,10 +158,10 @@ all: $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION)
 
 lib: $(BUILD_PATH)/lib$(LIB_NAME).a
 
-$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION): $(OBJS) $(DEPS)
+$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION): $(OBJS) | $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
-$(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS) $(DEPS)
+$(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS) | $(DEPS)
 	$(call MK_LIB,$(AR),$(ARFLAGS),$@,$(OBJS))
 
 $(foreach O_DIR,$(OBJS_DIRS),$(eval $(call CREATE_DIR,$(O_DIR))))
@@ -177,25 +177,69 @@ $(eval \
 $(call COMPILE_ONLY,$(call CSOURCES_2_OBJS,$(C_FILE)),\
 $(C_FILE),$(CC),$(CPPFLAGS),$(CFLAGS))))
 
+run: all
+ifeq ($(VALGRIND),1)
+ifeq ($(ASAN),1)
+	$(error "valgrind can't run with asan")
+else
+	valgrind $(VGFLAGS) $(EXEC_FILE)
+endif
+else
+	$(EXEC_FILE)
+endif
+
+run_valgrind: all
+ifeq ($(ASAN),1)
+	$(error "valgrind can't run with asan")
+else
+	valgrind $(VGFLAGS) $(EXEC_FILE)
+endif
+
+run_cgdb: all
+ifeq ($(ASAN),1)
+	(ASAN_OPTIONS=sleep_before_dying=10:sleep_after_init=10 $(EXEC_FILE) > /dev/null 2>&1 &)
+	sleep 5
+	sudo cgdb -- -q -p $(shell pidof $(EXEC_FILE))
+else
+ifeq ($(VALGRIND),1)
+	valgrind $(VGFLAGS) --vgdb=yes --vgdb-error=0 $(EXEC_FILE)
+else
+	cgdb $(EXEC_FILE)
+endif
+endif
+
 info:
-	$(info [INFO] AR: $(AR))
-	$(info [INFO] ARFLAGS: $(ARFLAGS))
-	$(info [INFO] C compiler: $(CC))
-	$(info [INFO] C++ compiler: $(CXX))
-	$(info [INFO] linker: $(LD))
-	$(info [INFO] C++ flags: $(CXXFLAGS))
-	$(info [INFO] C flags: $(CFLAGS))
-	$(info [INFO] preprocessor flags: $(CPPFLAGS))
+	$(info [INFO] MEMORY         : $(MEMORY))
+	$(info [INFO] ASAN           : $(ASAN))
+	$(info [INFO] VALGRIND       : $(VALGRIND))
+	$(info [INFO] AFLAGS         : $(AFLAGS))
+	$(info [INFO] VGFLAGS        : $(VGFLAGS))
+	$(info [INFO] BUILD_DIR      : $(BUILD_DIR))
+	$(info [INFO] BUILD_MODE_NAME: $(BUILD_MODE_NAME))
+	$(info [INFO] BUILD_PATH     : $(BUILD_PATH))
+	$(info [INFO] EMSCRIPTEN     : $(EMSCRIPTEN))
+	$(info [INFO] MSVC           : $(MSVC))
+	$(info [INFO] CLANG          : $(CLANG))
+	$(info [INFO] GCC            : $(GCC))
+	$(info [INFO] TARGET         : $(TARGET))
+	$(info [INFO] AR             : $(AR))
+	$(info [INFO] ARFLAGS        : $(ARFLAGS))
+	$(info [INFO] C compiler     : $(CC))
+	$(info [INFO] C++ compiler   : $(CXX))
+	$(info [INFO] linker         : $(LD))
+	$(info [INFO] C++ flags      : $(CXXFLAGS))
+	$(info [INFO] C flags        : $(CFLAGS))
+	$(info [INFO] preprocessor   : $(CPPFLAGS))
 	$(info [INFO] libraries flags: $(LDFLAGS))
-	$(info [INFO] libraries: $(LDLIBS))
-	$(info [INFO] C++ Source files: $(SRCS_CXX))
-	$(info [INFO] C Source files: $(SRCS_C))
-	$(info [INFO] Objects to create: $(OBJS))
-	$(info [INFO] Deps to create: $(DEPS))
-	$(info [INFO] Source directory tree: $(SRCS_DIRS))
-	$(info [INFO] Object directory tree to create: $(OBJS_DIRS))
-	$(info [INFO] Deps directory tree to create: $(DEPS_DIRS))
-	$(info [INFO] EXEC: $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
+	$(info [INFO] libraries      : $(LDLIBS))
+	$(info [INFO] C++ sources    : $(SRCS_CXX))
+	$(info [INFO] C sources      : $(SRCS_C))
+	$(info [INFO] Objects        : $(OBJS))
+	$(info [INFO] Deps           : $(DEPS))
+	$(info [INFO] Source dirs    : $(SRCS_DIRS))
+	$(info [INFO] Object dirs    : $(OBJS_DIRS))
+	$(info [INFO] Deps dirs      : $(DEPS_DIRS))
+	$(info [INFO] EXEC           : $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
 
 clean:
 	$(call REMOVE,$(OBJS_DIRS))
