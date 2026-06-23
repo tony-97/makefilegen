@@ -53,7 +53,7 @@ EXEC_FILE := $(BUILD_MODE_PATH)/$(EXEC_NAME)
 
 EXEC_PID = $(shell pidof $(EXEC_FILE))
 
-.PHONY: all info clean cleanall
+.PHONY: info clean cleanall
 
 all:
 	$(MAKE) -f Makefile.rules all
