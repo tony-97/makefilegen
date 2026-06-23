@@ -98,6 +98,7 @@ info:
 	$(info [INFO] CLANG     : $(CLANG))
 	$(info [INFO] GCC       : $(GCC))
 	$(info [INFO] CL        : $(CL))
+	$(info [INFO] TARGET    : $(TARGET))
 	$(info )
 	$(info =====SUB MAKE INFO=====)
 	$(info )
