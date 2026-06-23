@@ -154,11 +154,11 @@ DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 $(BUILD_PATH):
 	$(call MAKEDIR,$(BUILD_PATH))
 
-all: $(BUILD_PATH)/$(EXEC_NAME)
+all: $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION)
 
 lib: $(BUILD_PATH)/lib$(LIB_NAME).a
 
-$(BUILD_PATH)/$(EXEC_NAME): $(OBJS) $(DEPS)
+$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION): $(OBJS) $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
 $(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS) $(DEPS)
@@ -195,12 +195,13 @@ info:
 	$(info [INFO] Source directory tree: $(SRCS_DIRS))
 	$(info [INFO] Object directory tree to create: $(OBJS_DIRS))
 	$(info [INFO] Deps directory tree to create: $(DEPS_DIRS))
+	$(info [INFO] EXEC: $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
 
 clean:
 	$(call REMOVE,$(OBJS_DIRS))
 
 cleanall: clean
-	$(call REMOVE,$(BUILD_PATH)/$(EXEC_NAME))
+	$(call REMOVE,$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
 	$(call REMOVE,$(DEPS_DIRS))
 
 $(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
