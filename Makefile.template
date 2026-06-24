@@ -83,25 +83,25 @@ export
 .PHONY: all lib run run_cgdb info clean cleanall
 
 all:
-	$(MAKE) -f Makefile.rules all
+	@$(MAKE) -f Makefile.rules all
 
 lib:
-	$(MAKE) -f Makefile.rules lib
+	@$(MAKE) -f Makefile.rules lib
 
 run:
-	$(MAKE) -f Makefile.rules run
+	@$(MAKE) -f Makefile.rules run
 
 run_valgrind:
-	$(MAKE) -f Makefile.rules run_valgrind
+	@$(MAKE) -f Makefile.rules run_valgrind
 
 run_cgdb:
-	$(MAKE) -f Makefile.rules run_cgdb
+	@$(MAKE) -f Makefile.rules run_cgdb
 
 info:
-	$(MAKE) -f Makefile.rules info
+	@$(MAKE) -f Makefile.rules info
 
 clean:
-	$(MAKE) -f Makefile.rules clean
+	@$(MAKE) -f Makefile.rules clean
 
 cleanall:
-	$(MAKE) -f Makefile.rules cleanall
+	@$(MAKE) -f Makefile.rules cleanall
