@@ -12,6 +12,19 @@ CPPFLAGS += $(MK_INCLUDES) $(MK_DEFINES)
 # Libraries paths
 LDFLAGS += $(MK_LIBS_PATH)
 
+ifeq ($(TARGET),ANDROID)
+	CFLAGS   += --sysroot=$(ANDROID_TOOLCHAIN)/sysroot
+	CXXFLAGS += --sysroot=$(ANDROID_TOOLCHAIN)/sysroot
+	LDFLAGS  += -shared --sysroot=$(ANDROID_TOOLCHAIN)/sysroot
+endif
+
+# Define copy command depending on OS
+ifeq ($(OS),Windows_NT)
+    COPY_COMMAND ?= copy /Y
+else
+    COPY_COMMAND ?= cp -f
+endif
+
 # sources to include
 EXTRA_SRCS_CXX ?=
 EXTRA_SRCS_C ?=
@@ -125,6 +138,62 @@ ROOT_PATH ?= $(BUILD_PATH)
 # Name of the deps directory
 DEP_DIR ?= $(ROOT_PATH)/deps
 
+# File path of the target generated library
+LIB_FILE_PATH := $(BUILD_PATH)/lib$(LIB_NAME).a
+
+# File path of the target generated exec
+ifneq ($(TARGET),ANDROID)
+	EXEC_FILENAME := $(EXEC_NAME)$(EXEC_EXTENSION)
+	EXEC_FILE_PATH := $(BUILD_PATH)/$(EXEC_FILENAME)
+else
+	EXEC_FILENAME := lib$(EXEC_NAME).so
+	EXEC_FILE_PATH := $(BUILD_PATH)/lib/$(ANDROID_APK_ABI)/$(EXEC_FILENAME)
+	LDFLAGS  += -Wl,-soname,lib$(EXEC_FILENAME).so -Wl,--exclude-libs,libatomic.a -static-libstdc++
+endif
+
+# Required path variables
+# NOTE: JAVA_HOME must be set to JDK (using OpenJDK 13)
+JAVA_HOME              ?= C:/open-jdk
+ANDROID_HOME           ?= C:/android-sdk
+ANDROID_BUILD_TOOLS    ?= $(firstword $(wildcard $(ANDROID_HOME)/build-tools/*))
+ANDROID_PLATFORM_TOOLS  = $(ANDROID_HOME)/platform-tools
+
+# Android project configuration variables
+PROJECT_NAME           ?= raylib_game
+PROJECT_LIBRARY_NAME   ?= $(EXEC_NAME)
+PROJECT_BUILD_PATH     ?= $(BUILD_PATH)
+PROJECT_RESOURCES_PATH ?= resources
+
+# Android app configuration variables
+APP_LABEL_NAME         ?= rGame
+APP_COMPANY_NAME       ?= raylib
+APP_PRODUCT_NAME       ?= rgame
+APP_VERSION_CODE       ?= 1
+APP_VERSION_NAME       ?= 1.0
+APP_ICON_LDPI          ?= assets/icons/raylib_36x36.png
+APP_ICON_MDPI          ?= assets/icons/raylib_48x48.png
+APP_ICON_HDPI          ?= assets/icons/raylib_72x72.png
+APP_SCREEN_ORIENTATION ?= landscape
+APP_KEYSTORE_PASS      ?= raylib
+
+# Pull the raw text from template files
+RAW_STRINGS = $(file < android/strings.xml)
+RAW_LOADER  = $(file < android/NativeLoader.java)
+RAW_MANIFEST = $(file < android/AndroidManifest.xml)
+
+# Replace template values: $1 is the Variable Name, $2 is the Text
+APPLY_TEMPLATE = $(subst {$1},$($1),$2)
+
+# Swap the variables
+STRINGS_XML = $(call APPLY_TEMPLATE,APP_LABEL_NAME,$(RAW_STRINGS))
+
+LOADER_JAVA = $(call APPLY_TEMPLATE,APP_COMPANY_NAME,\
+$(call APPLY_TEMPLATE,APP_PRODUCT_NAME,\
+$(call APPLY_TEMPLATE,PROJECT_LIBRARY_NAME,\
+$(RAW_LOADER))))
+
+ANDROIDMANIFEST = $(call APPLY_TEMPLATE,APP_COMPANY_NAME,$(call APPLY_TEMPLATE,APP_PRODUCT_NAME,$(call APPLY_TEMPLATE,APP_VERSION_CODE,$(call APPLY_TEMPLATE,APP_VERSION_NAME,$(call APPLY_TEMPLATE,ANDROID_API_VERSION,$(call APPLY_TEMPLATE,APP_SCREEN_ORIENTATION,$(call APPLY_TEMPLATE,PROJECT_LIBRARY_NAME,$(RAW_MANIFEST))))))))
+
 # Sources to compile
 SRCS_CXX := $(filter-out $(EXCLUDE_SRCS),$(call FIND,$(SRC_DIR),*.cpp *.cc *.cxx)) $(EXTRA_SRCS_CXX)
 SRCS_C   := $(filter-out $(EXCLUDE_SRCS),$(call FIND,$(SRC_DIR),*.c)) $(EXTRA_SRCS_C)
@@ -149,23 +218,59 @@ OBJS_DIRS := $(call SOURCE_PATH_2_OBJ,$(SRCS_DIRS))
 # Deps directories with the same structure as src dir
 DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
 
+# Android directories
+ANDROID_DIRS := $(BUILD_PATH)/src \
+$(BUILD_PATH)/src/com \
+$(BUILD_PATH)/src/com/$(APP_COMPANY_NAME) \
+$(BUILD_PATH)/src/com/$(APP_COMPANY_NAME)/$(APP_PRODUCT_NAME) \
+$(BUILD_PATH)/lib \
+$(BUILD_PATH)/lib/$(ANDROID_APK_ABI) \
+$(BUILD_PATH)/bin \
+$(BUILD_PATH)/res \
+$(BUILD_PATH)/res/drawable-ldpi \
+$(BUILD_PATH)/res/drawable-mdpi \
+$(BUILD_PATH)/res/drawable-hdpi \
+$(BUILD_PATH)/res/values \
+$(BUILD_PATH)/assets \
+$(BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH) \
+$(BUILD_PATH)/obj/screens
+
 .PHONY: clean cleanall info run run_valgrind run_cgdb
 
 $(BUILD_PATH):
 	$(call MAKEDIR,$(BUILD_PATH))
 
-all: $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION)
+ifneq ($(TARGET),ANDROID)
+all: $(EXEC_FILE_PATH)
+else
+all: $(ANDROID_DIRS) \
+     $(EXEC_FILE_PATH) \
+     copy_project_required_libs \
+     copy_project_resources \
+     generate_loader_script \
+     generate_android_manifest \
+     generate_apk_keystore \
+     config_project_package \
+     compile_project_class \
+     compile_project_class_dex \
+     create_project_apk_package \
+     zipalign_project_apk_package \
+     sign_project_apk_package
+endif
 
-lib: $(BUILD_PATH)/lib$(LIB_NAME).a
+lib: $(LIB_FILE_PATH)
 
-$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION): $(OBJS) | $(DEPS)
+$(EXEC_FILE_PATH): $(OBJS) | $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
-$(BUILD_PATH)/lib$(LIB_NAME).a: $(OBJS) | $(DEPS)
+$(LIB_FILE_PATH): $(OBJS) | $(DEPS)
 	$(call MK_LIB,$(AR),$(ARFLAGS),$@,$(OBJS))
 
 $(foreach O_DIR,$(OBJS_DIRS),$(eval $(call CREATE_DIR,$(O_DIR))))
 $(foreach D_DIR,$(DEPS_DIRS),$(eval $(call CREATE_DIR,$(D_DIR))))
+ifeq ($(TARGET),ANDROID)
+$(foreach A_DIR,$(ANDROID_DIRS),$(eval $(call CREATE_DIR,$(A_DIR))))
+endif
 
 $(foreach CXX_FILE,$(SRCS_CXX),\
 $(eval \
@@ -239,13 +344,14 @@ info:
 	$(info [INFO] Source dirs    : $(SRCS_DIRS))
 	$(info [INFO] Object dirs    : $(OBJS_DIRS))
 	$(info [INFO] Deps dirs      : $(DEPS_DIRS))
-	$(info [INFO] EXEC           : $(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
+	$(info [INFO] EXEC           : $(EXEC_FILE_PATH))
+	$(info [INFO] LIBS           : $(LIBS))
 
 clean:
 	$(call REMOVE,$(OBJS_DIRS))
 
 cleanall: clean
-	$(call REMOVE,$(BUILD_PATH)/$(EXEC_NAME)$(EXEC_EXTENSION))
+	$(call REMOVE,$(EXEC_FILE_PATH))
 	$(call REMOVE,$(DEPS_DIRS))
 
 $(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
@@ -261,3 +367,90 @@ $(eval \
 $(call MK_DEPS,$(call CSOURCES_2_DEPS,$(C_FILE)),\
 $(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
 
+# Copy required shared libs for integration into APK
+# NOTE: If using shared libs they are loaded by generated NativeLoader.java
+copy_project_required_libs:
+	$(foreach LIB,$(LIBS),$(COPY_COMMAND) $(LIB) $(PROJECT_BUILD_PATH))
+
+# Copy project required resources: strings.xml, icon.png, assets
+# NOTE: Required strings.xml is generated and game resources are copied to assets folder
+copy_project_resources:
+	$(COPY_COMMAND) $(APP_ICON_LDPI) $(PROJECT_BUILD_PATH)/res/drawable-ldpi/icon.png
+	$(COPY_COMMAND) $(APP_ICON_MDPI) $(PROJECT_BUILD_PATH)/res/drawable-mdpi/icon.png
+	$(COPY_COMMAND) $(APP_ICON_HDPI) $(PROJECT_BUILD_PATH)/res/drawable-hdpi/icon.png
+	$(file > $(PROJECT_BUILD_PATH)/res/values/strings.xml,$(STRINGS_XML))
+	@if [ -d "$(PROJECT_RESOURCES_PATH)" ]; then cp -rf $(PROJECT_RESOURCES_PATH) $(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH); fi
+
+# Generate NativeLoader.java to load required shared libraries
+# NOTE: Probably not the bet way to generate this file... but it works.
+generate_loader_script:
+	$(file > $(PROJECT_BUILD_PATH)/src/com/$(APP_COMPANY_NAME)/$(APP_PRODUCT_NAME)/NativeLoader.java,$(LOADER_JAVA))
+
+# Generate AndroidManifest.xml with all the required options
+# NOTE: Probably not the bet way to generate this file... but it works.
+generate_android_manifest:
+	$(file > $(PROJECT_BUILD_PATH)/AndroidManifest.xml,$(ANDROIDMANIFEST))
+
+# Generate storekey for APK signing: $(PROJECT_NAME).keystore
+# NOTE: Configure here your Distinguished Names (-dname) if required!
+generate_apk_keystore: 
+ifeq ($(OS),Windows_NT)
+	if not exist $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).keystore $(JAVA_HOME)/bin/keytool -genkeypair -validity 10000 -dname "CN=$(APP_COMPANY_NAME),O=Android,C=ES" -keystore $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).keystore -storepass $(APP_KEYSTORE_PASS) -keypass $(APP_KEYSTORE_PASS) -alias $(PROJECT_NAME)Key -keyalg RSA
+else
+	@[ -f "$(PROJECT_BUILD_PATH)/$(PROJECT_NAME).keystore" ] || $(JAVA_HOME)/bin/keytool -genkeypair -validity 10000 -dname "CN=$(APP_COMPANY_NAME),O=Android,C=ES" -keystore $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).keystore -storepass $(APP_KEYSTORE_PASS) -keypass $(APP_KEYSTORE_PASS) -alias $(PROJECT_NAME)Key -keyalg RSA
+endif
+
+# Config project package and resource using AndroidManifest.xml and res/values/strings.xml
+# NOTE: Generates resources file: src/com/$(APP_COMPANY_NAME)/$(APP_PRODUCT_NAME)/R.java
+config_project_package:
+	$(ANDROID_BUILD_TOOLS)/aapt package -f -m -S $(PROJECT_BUILD_PATH)/res -J $(PROJECT_BUILD_PATH)/src -M $(PROJECT_BUILD_PATH)/AndroidManifest.xml -I $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar
+
+# Compile project .java code into .class (Java bytecode)
+compile_project_class:
+	$(JAVA_HOME)/bin/javac -verbose -source 1.7 -target 1.7 -d $(PROJECT_BUILD_PATH)/obj -bootclasspath $(JAVA_HOME)/jre/lib/rt.jar -classpath $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar -d $(PROJECT_BUILD_PATH)/obj $(PROJECT_BUILD_PATH)/src/com/$(APP_COMPANY_NAME)/$(APP_PRODUCT_NAME)/R.java $(PROJECT_BUILD_PATH)/src/com/$(APP_COMPANY_NAME)/$(APP_PRODUCT_NAME)/NativeLoader.java
+
+# Compile .class files into Dalvik executable bytecode (.dex)
+# NOTE: Since Android 5.0, Dalvik interpreter (JIT) has been replaced by ART (AOT)
+compile_project_class_dex:
+	$(ANDROID_BUILD_TOOLS)/d8 --release \
+	--lib $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar \
+	--output $(PROJECT_BUILD_PATH)/bin \
+	$$(find $(PROJECT_BUILD_PATH)/obj -type f -name "*.class")
+
+# Create Android APK package: bin/$(PROJECT_NAME).unsigned.apk
+# NOTE: Requires compiled classes.dex and lib$(PROJECT_LIBRARY_NAME).so
+# NOTE: Use -A resources to define additional directory in which to find raw asset files
+create_project_apk_package:
+	$(ANDROID_BUILD_TOOLS)/aapt package -f -M $(PROJECT_BUILD_PATH)/AndroidManifest.xml -S $(PROJECT_BUILD_PATH)/res -A $(PROJECT_BUILD_PATH)/assets -I $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar -F $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).unsigned.apk $(PROJECT_BUILD_PATH)/bin
+	cd $(PROJECT_BUILD_PATH) && $(ANDROID_BUILD_TOOLS)/aapt add $(PROJECT_NAME).unsigned.apk lib/$(ANDROID_APK_ABI)/$(EXEC_FILENAME) $(PROJECT_SHARED_LIBS)
+
+# Create zip-aligned APK package: $(PROJECT_NAME).apk
+zipalign_project_apk_package:
+	$(ANDROID_BUILD_TOOLS)/zipalign -p -f 4 $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).unsigned.apk $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).aligned.apk
+
+# Create signed APK package using generated Key: bin/$(PROJECT_NAME).signed.apk
+sign_project_apk_package:
+	$(ANDROID_BUILD_TOOLS)/apksigner sign --ks $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).keystore \
+	--ks-pass pass:$(APP_KEYSTORE_PASS) \
+	--out $(PROJECT_NAME).apk \
+	$(PROJECT_BUILD_PATH)/$(PROJECT_NAME).aligned.apk
+
+# Install $(PROJECT_NAME).apk to default emulator/device
+# NOTE: Use -e (emulator) or -d (device) parameters if required
+install:
+	$(ANDROID_PLATFORM_TOOLS)/adb install $(PROJECT_NAME).apk
+
+# Check supported ABI for the device (armeabi-v7a, arm64-v8a, x86, x86_64)
+check_device_abi:
+	$(ANDROID_PLATFORM_TOOLS)/adb shell getprop ro.product.cpu.abi
+
+# Monitorize output log coming from device, only raylib tag
+logcat:
+	$(ANDROID_PLATFORM_TOOLS)/adb logcat -c
+	$(ANDROID_PLATFORM_TOOLS)/adb logcat raylib:V *:S
+
+# Install and monitorize $(PROJECT_NAME).apk to default emulator/device
+deploy:
+	$(ANDROID_PLATFORM_TOOLS)/adb install $(PROJECT_NAME).apk
+	$(ANDROID_PLATFORM_TOOLS)/adb logcat -c
+	$(ANDROID_PLATFORM_TOOLS)/adb logcat raylib:V *:S
