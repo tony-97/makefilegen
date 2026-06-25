@@ -24,8 +24,21 @@ ifeq ($(TARGET),WEB)
     CFLAGS   += 
 endif
 ifeq ($(TARGET),ANDROID)
-	ANDROID_ARCH ?= arm64
-	ANDROID_API_VERSION ?= 29
+	ANDROID_ARCH           ?= arm64
+	ANDROID_API_VERSION    ?= 29
+    PROJECT_NAME           ?= raylib_game
+    PROJECT_RESOURCES_PATH ?= resources
+    APP_LABEL_NAME         ?= rGame
+    APP_COMPANY_NAME       ?= raylib
+    APP_PRODUCT_NAME       ?= rgame
+    APP_VERSION_CODE       ?= 1
+    APP_VERSION_NAME       ?= 1.0
+    APP_ICON_LDPI          ?= assets/icons/raylib_36x36.png
+    APP_ICON_MDPI          ?= assets/icons/raylib_48x48.png
+    APP_ICON_HDPI          ?= assets/icons/raylib_72x72.png
+    APP_SCREEN_ORIENTATION ?= landscape
+    APP_KEYSTORE_PASS      ?= raylib
+
     LDLIBS   += 
     LDFLAGS  += 
     DEBUG_FLAGS   += 
