@@ -229,6 +229,7 @@ OBJS_DIRS := $(call SOURCE_PATH_2_OBJ,$(SRCS_DIRS))
 
 # Java class dir
 JAVA_CLASS_DIR := $(PROJECT_BUILD_PATH)/class
+CLASSES_JAR_PATH = $(JAVA_CLASS_DIR)/classes.jar
 
 # Deps directories with the same structure as src dir
 DEPS_DIRS := $(call SOURCE_PATH_2_DEP,$(SRCS_DIRS))
@@ -348,7 +349,7 @@ $(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
 # Copy required shared libs for integration into APK
 # NOTE: If using shared libs they are loaded by generated NativeLoader.java
 copy_project_required_libs:
-	$(foreach LIB,$(LIBS),$(COPYFILE) $(LIB) $(PROJECT_BUILD_PATH))
+	$(foreach LIB,$(LIBS),$(call COPYFILE,$(LIB),$(PROJECT_BUILD_PATH)))
 
 # Copy project required resources: strings.xml, icon.png, assets
 # NOTE: Required strings.xml is generated and game resources are copied to assets folder
@@ -357,10 +358,10 @@ $(PROJECT_BUILD_PATH)/res/drawable-mdpi/icon.png: $(APP_ICON_MDPI)
 $(PROJECT_BUILD_PATH)/res/drawable-hdpi/icon.png: $(APP_ICON_HDPI)
 
 $(PROJECT_BUILD_PATH)/res/%/icon.png:
-	$(call $(COPYFILE),$<,$@)
+	$(call COPYFILE,$<,$@)
 
 copy_project_resources: $(ICONS_PATH) $(STRINGS_XML_PATH) $(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH)
-	$(call $(COPYDIR),$(PROJECT_RESOURCES_PATH),$(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH))
+	$(call COPYDIR,$(PROJECT_RESOURCES_PATH),$(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH))
 
 $(STRINGS_XML_PATH): $(STRINGS_XML_TEMPLATE_PATH)
 	$(file > $(STRINGS_XML_PATH),$(STRINGS_XML))
@@ -391,20 +392,22 @@ config_project_package: $(R_JAVA_PATH)
 $(R_JAVA_PATH): $(ANDROIDMANIFEST_PATH) $(STRINGS_XML_PATH)
 	$(ANDROID_BUILD_TOOLS)/aapt package -f -m -S $(PROJECT_BUILD_PATH)/res -J $(PROJECT_BUILD_PATH)/src -M $(ANDROIDMANIFEST_PATH) -I $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar
 
-# Compile project .java code into .class (Java bytecode)
-compile_project_class: $(CLASS_COMPILE_STAMP)
+compile_project_class: $(CLASSES_JAR_PATH)
 
-$(CLASS_COMPILE_STAMP): $(JAVA_SRCS)
+# Compile project .java code into .class (Java bytecode)
+$(CLASSES_JAR_PATH): $(JAVA_SRCS)
 	$(JAVA_HOME)/bin/javac -verbose -source 1.7 -target 1.7 -d $(JAVA_CLASS_DIR) -bootclasspath $(JAVA_HOME)/jre/lib/rt.jar -classpath $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar $(JAVA_SRCS)
-	$(file > $(CLASS_COMPILE_STAMP),)
+	$(JAVA_HOME)/bin/jar cf $(CLASSES_JAR_PATH) -C $(JAVA_CLASS_DIR) .
+
+compile_project_class_dex: $(CLASSES_DEX_PATH)
 
 # Compile .class files into Dalvik executable bytecode (.dex)
 # NOTE: Since Android 5.0, Dalvik interpreter (JIT) has been replaced by ART (AOT)
-$(CLASSES_DEX_PATH): $(CLASS_COMPILE_STAMP)
+$(CLASSES_DEX_PATH): $(CLASSES_JAR_PATH)
 	$(ANDROID_BUILD_TOOLS)/d8 --release \
 	--lib $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar \
 	--output $(ANDROID_BIN_DIR) \
-	$(JAVA_CLASS_DIR)
+	$(CLASSES_JAR_PATH)
 
 create_project_apk_package: $(UNSIGNED_APK_PATH)
 
