@@ -1,3 +1,4 @@
+# TODO add CPU architecture for the build path eg obj/x86/ lib/x86 bin/x86
 -include $(DEPS)
 
 # Flags to pass to the C compiler
@@ -14,10 +15,29 @@ LDFLAGS += $(MK_LIBS_PATH)
 
 # sources to include
 EXTRA_SRCS_CXX ?=
-EXTRA_SRCS_C ?=
+EXTRA_SRCS_C   ?=
 
 # sources to exclude
 EXCLUDE_SRCS ?=
+
+#==============================================================================
+# External Libraries — auto-discovered from libs/
+#==============================================================================
+# Only consider directories that contain a Makefile (i.e. buildable libraries)
+COMPILE_LIBS_PATH ?= .
+LIB_DIRS := $(foreach LIB_DIR,$(wildcard $(COMPILE_LIBS_PATH)/libs/*),$(if $(wildcard $(LIB_DIR)/Makefile),$(LIB_DIR)))
+
+# Include each library's Makefile for consumer configuration.
+# Build-only sections and targets are auto-guarded via MAKEFILE_LIST.
+ifneq ($(LIB_DIRS),)
+include $(foreach LIB_DIR,$(LIB_DIRS),$(LIB_DIR)/Makefile)
+endif
+
+# Generically add every library's output directory to the linker search path.
+# Each lib builds into: libs/<name>/<BUILD_DIR_NAME>/<BUILD_MODE_NAME>/
+LIBS_BUILD_PATH = $(addsuffix /$(BUILD_MODE_DIR_NAME),$(LIB_DIRS))
+LIBS            = $(foreach DIR,$(LIBS_BUILD_PATH),$(wildcard $(DIR)/lib*))
+LIBS_PATH 	   += $(LIBS_BUILD_PATH)
 
 #==============================================================================
 # Compile only macro
@@ -33,12 +53,63 @@ $(1) : $(2)
 endef
 
 #==============================================================================
+# Per-library build / clean targets (auto-generated from LIB_DIRS)
+#
+# For each libs/<name>/ directory with a Makefile, this generates:
+#   build-lib-<name>   — builds the library via $(MAKE) -f libs/<name> lib
+#   clean-lib-<name>   — cleans the library
+#   cleanall-lib-<name> — deep-cleans the library
+#
+# These individual targets are then collected into:
+#   build-libs, clean-libs, cleanall-libs
+#==============================================================================
+define LIB_BUILD_TEMPLATE
+.PHONY: build-lib-$(notdir $(1))
+build-lib-$(notdir $(1)):
+	@$$(MAKE) -f $(1)/Makefile BUILD_PATH=$(1)/$$(BUILD_PATH) COMPILE_LIBS_PATH=$(1) lib
+endef
+
+define LIB_CLEAN_TEMPLATE
+.PHONY: clean-lib-$(notdir $(1)) cleanall-lib-$(notdir $(1))
+clean-lib-$(notdir $(1)):
+	@$$(MAKE) -f $(1)/Makefile BUILD_PATH=$(1)/$$(BUILD_PATH) COMPILE_LIBS_PATH=$(1) clean
+cleanall-lib-$(notdir $(1)):
+	@$$(MAKE) -f $(1)/Makefile BUILD_PATH=$(1)/$$(BUILD_PATH) COMPILE_LIBS_PATH=$(1) cleanall
+endef
+
+define LIB_INFO_TEMPLATE
+.PHONY: info-lib-$(notdir $(1))
+info-lib-$(notdir $(1)):
+	@$$(MAKE) -f $(1)/Makefile BUILD_PATH=$(1)/$$(BUILD_PATH) COMPILE_LIBS_PATH=$(1) info
+endef
+
+#==============================================================================
+# Copy resources for android build
+#==============================================================================
+# $(1) : The relative source file path (e.g., resources/images/player.png)
+define COPY_RESOURCE_RULE
+$(ANDROID_ASSETS_DIR)/$1: $1
+	$$(call MAKEDIR,$$@)
+	$$(call COPYFILE,$$<,$$@)
+endef
+
+#==============================================================================
 # Create directory
 #==============================================================================
 # $(1) : Directory to be create
 define CREATE_DIR
 $(1) :
 	$(call MAKEDIR,$(1))
+endef
+
+#==============================================================================
+# Copies required libs for android
+#==============================================================================
+# $(1) : Lib path to be copied
+# $(2) : Dest path
+define COPY_ANDROID_LIBS
+$(PROJECT_BUILD_PATH)/$(notdir $(1)): $(1)
+	$$(call COPYFILE,$$<,$$@)
 endef
 
 #==============================================================================
@@ -104,9 +175,6 @@ endef
 # $(shell find $(1) -type f -iname $(2))
 FIND = $(foreach d,$(wildcard $(1:=/*)),$(call FIND,$d,$2) $(filter $(subst *,%,$2),$d))
 
-# The path where to put the executable and the library
-BUILD_PATH ?= .
-
 # Name for the library
 LIB_NAME ?= mylib
 
@@ -116,11 +184,14 @@ EXEC_NAME ?= app
 # Name of the sources directory
 SRC_DIR ?= src
 
+# The path where to put the executable and the library
+BUILD_PATH ?= $(BUILD_MODE_DIR_NAME)
+
 # Name of the objects directory
-OBJ_DIR ?= obj
+OBJ_DIR    = $(BUILD_PATH)/obj
 
 # Name of the root build directory
-ROOT_PATH ?= $(BUILD_PATH)
+ROOT_PATH  = $(patsubst %/,%,$(dir $(patsubst %/,%,$(BUILD_PATH))))
 
 # Name of the deps directory
 DEP_DIR ?= $(ROOT_PATH)/deps
@@ -193,6 +264,8 @@ ALIGNED_APK_PATH  := $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).aligned.apk
 ANDROID_BIN_DIR  := $(PROJECT_BUILD_PATH)/bin
 CLASSES_DEX_PATH := $(ANDROID_BIN_DIR)/classes.dex
 
+LIB_TARGETS = $(foreach LIB,$(LIBS),$(PROJECT_BUILD_PATH)/$(notdir $(LIB)))
+
 # Replace template values: $1 is the Variable Name, $2 is the Text
 APPLY_TEMPLATE = $(subst {$1},$($1),$2)
 
@@ -205,6 +278,10 @@ $(call APPLY_TEMPLATE,PROJECT_LIBRARY_NAME,\
 $(RAW_LOADER))))
 
 ANDROIDMANIFEST = $(call APPLY_TEMPLATE,APP_COMPANY_NAME,$(call APPLY_TEMPLATE,APP_PRODUCT_NAME,$(call APPLY_TEMPLATE,APP_VERSION_CODE,$(call APPLY_TEMPLATE,APP_VERSION_NAME,$(call APPLY_TEMPLATE,ANDROID_API_VERSION,$(call APPLY_TEMPLATE,APP_SCREEN_ORIENTATION,$(call APPLY_TEMPLATE,PROJECT_LIBRARY_NAME,$(RAW_MANIFEST))))))))
+
+ANDROID_ASSETS_DIR = $(PROJECT_BUILD_PATH)/assets
+
+RESOURCE_DEST_FILES = $(foreach FILE,$(RESOURCE_SRC_FILES),$(ANDROID_ASSETS_DIR)/$(FILE))
 
 # Sources to compile
 SRCS_CXX := $(filter-out $(EXCLUDE_SRCS),$(call FIND,$(SRC_DIR),*.cpp *.cc *.cxx)) $(EXTRA_SRCS_CXX)
@@ -252,7 +329,7 @@ $(BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH) \
 $(BUILD_PATH)/obj/screens \
 $(JAVA_CLASS_DIR)
 
-.PHONY: clean cleanall info run run_valgrind run_cgdb
+.PHONY: clean cleanall info run run_valgrind run_cgdb build-libs clean-libs cleanall-libs
 
 $(BUILD_PATH):
 	$(call MAKEDIR,$(BUILD_PATH))
@@ -277,6 +354,11 @@ endif
 
 lib: $(LIB_FILE_PATH)
 
+build-libs: $(foreach lib,$(LIB_DIRS),build-lib-$(notdir $(lib)))
+clean-libs: $(foreach lib,$(LIB_DIRS),clean-lib-$(notdir $(lib)))
+cleanall-libs: $(foreach lib,$(LIB_DIRS),cleanall-lib-$(notdir $(lib)))
+info-libs: $(foreach lib,$(LIB_DIRS),info-lib-$(notdir $(lib)))
+
 $(EXEC_FILE_PATH): $(OBJS) | $(DEPS)
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
@@ -300,41 +382,8 @@ $(eval \
 $(call COMPILE_ONLY,$(call CSOURCES_2_OBJS,$(C_FILE)),\
 $(C_FILE),$(CC),$(CPPFLAGS),$(CFLAGS))))
 
-run: all
-ifeq ($(VALGRIND),1)
-ifeq ($(ASAN),1)
-	$(error "valgrind can't run with asan")
-else
-	valgrind $(VGFLAGS) $(EXEC_FILE_PATH)
-endif
-else
-	$(EXEC_FILE_PATH)
-endif
-
-run_valgrind: all
-ifeq ($(ASAN),1)
-	$(error "valgrind can't run with asan")
-else
-	valgrind $(VGFLAGS) $(EXEC_FILE_PATH)
-endif
-
-run_cgdb: all
-ifeq ($(ASAN),1)
-	(ASAN_OPTIONS=sleep_before_dying=10:sleep_after_init=10 $(EXEC_FILE_PATH) > /dev/null 2>&1 &)
-	sleep 5
-	sudo cgdb -- -q -p $(shell pidof $(EXEC_FILE_PATH))
-else
-ifeq ($(VALGRIND),1)
-	valgrind $(VGFLAGS) --vgdb=yes --vgdb-error=0 $(EXEC_FILE_PATH)
-else
-	cgdb $(EXEC_FILE_PATH)
-endif
-endif
-
 $(OBJS): | $(BUILD_PATH) $(OBJS_DIRS)
 $(DEPS): | $(BUILD_PATH) $(DEPS_DIRS)
-
-androiddirs: $(ANDROID_DIRS) $(BUILD_PATH)
 
 $(foreach CXX_FILE,$(SRCS_CXX),\
 $(eval \
@@ -346,10 +395,15 @@ $(eval \
 $(call MK_DEPS,$(call CSOURCES_2_DEPS,$(C_FILE)),\
 $(C_FILE),$(call CSOURCES_2_OBJS,$(C_FILE)),$(CC),$(CPPFLAGS),$(CFLAGS))))
 
+$(foreach lib,$(LIB_DIRS),$(eval $(call LIB_BUILD_TEMPLATE,$(lib))))
+$(foreach lib,$(LIB_DIRS),$(eval $(call LIB_CLEAN_TEMPLATE,$(lib))))
+$(foreach lib,$(LIB_DIRS),$(eval $(call LIB_INFO_TEMPLATE ,$(lib))))
+
 # Copy required shared libs for integration into APK
 # NOTE: If using shared libs they are loaded by generated NativeLoader.java
-copy_project_required_libs:
-	$(foreach LIB,$(LIBS),$(call COPYFILE,$(LIB),$(PROJECT_BUILD_PATH)))
+copy_project_required_libs: $(LIB_TARGETS)
+
+$(foreach LIB,$(LIBS),$(eval $(call COPY_ANDROID_LIBS,$(LIB))))
 
 # Copy project required resources: strings.xml, icon.png, assets
 # NOTE: Required strings.xml is generated and game resources are copied to assets folder
@@ -360,8 +414,9 @@ $(PROJECT_BUILD_PATH)/res/drawable-hdpi/icon.png: $(APP_ICON_HDPI)
 $(PROJECT_BUILD_PATH)/res/%/icon.png:
 	$(call COPYFILE,$<,$@)
 
-copy_project_resources: $(ICONS_PATH) $(STRINGS_XML_PATH) $(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH)
-	$(call COPYDIR,$(PROJECT_RESOURCES_PATH),$(PROJECT_BUILD_PATH)/assets/$(PROJECT_RESOURCES_PATH))
+$(foreach FILE,$(RESOURCE_SRC_FILES),$(eval $(call COPY_RESOURCE_RULE,$(FILE))))
+
+copy_project_resources: $(ICONS_PATH) $(STRINGS_XML_PATH) $(RESOURCE_DEST_FILES)
 
 $(STRINGS_XML_PATH): $(STRINGS_XML_TEMPLATE_PATH)
 	$(file > $(STRINGS_XML_PATH),$(STRINGS_XML))
@@ -415,7 +470,7 @@ create_project_apk_package: $(UNSIGNED_APK_PATH)
 # NOTE: Requires compiled classes.dex and lib$(PROJECT_LIBRARY_NAME).so
 # NOTE: Use -A resources to define additional directory in which to find raw asset files
 $(UNSIGNED_APK_PATH): $(CLASSES_DEX_PATH) $(EXEC_FILE_PATH)
-	$(ANDROID_BUILD_TOOLS)/aapt package -f -M $(ANDROIDMANIFEST_PATH) -S $(PROJECT_BUILD_PATH)/res -A $(PROJECT_BUILD_PATH)/assets -I $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar -F $(UNSIGNED_APK_PATH) $(ANDROID_BIN_DIR)
+	$(ANDROID_BUILD_TOOLS)/aapt package -f -M $(ANDROIDMANIFEST_PATH) -S $(PROJECT_BUILD_PATH)/res -A $(ANDROID_ASSETS_DIR) -I $(ANDROID_HOME)/platforms/android-$(ANDROID_API_VERSION)/android.jar -F $(UNSIGNED_APK_PATH) $(ANDROID_BIN_DIR)
 	cd $(PROJECT_BUILD_PATH) && $(ANDROID_BUILD_TOOLS)/aapt add $(PROJECT_NAME).unsigned.apk lib/$(ANDROID_APK_ABI)/$(EXEC_FILENAME) $(PROJECT_SHARED_LIBS)
 
 zipalign_project_apk_package: $(ALIGNED_APK_PATH)
@@ -451,13 +506,44 @@ android_logcat:
 android_deploy:
 	$(ANDROID_PLATFORM_TOOLS)/adb install $(PROJECT_NAME).apk
 
+
+run: all
+ifeq ($(VALGRIND),1)
+ifeq ($(ASAN),1)
+	$(error "valgrind can't run with asan")
+else
+	valgrind $(VGFLAGS) $(EXEC_FILE_PATH)
+endif
+else
+	$(EXEC_FILE_PATH)
+endif
+
+run_valgrind: all
+ifeq ($(ASAN),1)
+	$(error "valgrind can't run with asan")
+else
+	valgrind $(VGFLAGS) $(EXEC_FILE_PATH)
+endif
+
+run_cgdb: all
+ifeq ($(ASAN),1)
+	(ASAN_OPTIONS=sleep_before_dying=10:sleep_after_init=10 $(EXEC_FILE_PATH) > /dev/null 2>&1 &)
+	sleep 5
+	sudo cgdb -- -q -p $(shell pidof $(EXEC_FILE_PATH))
+else
+ifeq ($(VALGRIND),1)
+	valgrind $(VGFLAGS) --vgdb=yes --vgdb-error=0 $(EXEC_FILE_PATH)
+else
+	cgdb $(EXEC_FILE_PATH)
+endif
+endif
+
 info:
 	$(info [INFO] MEMORY         : $(MEMORY))
 	$(info [INFO] ASAN           : $(ASAN))
 	$(info [INFO] VALGRIND       : $(VALGRIND))
 	$(info [INFO] AFLAGS         : $(AFLAGS))
 	$(info [INFO] VGFLAGS        : $(VGFLAGS))
-	$(info [INFO] BUILD_DIR      : $(BUILD_DIR))
 	$(info [INFO] BUILD_MODE_NAME: $(BUILD_MODE_NAME))
 	$(info [INFO] BUILD_PATH     : $(BUILD_PATH))
 	$(info [INFO] EMSCRIPTEN     : $(EMSCRIPTEN))
@@ -483,7 +569,12 @@ info:
 	$(info [INFO] Object dirs    : $(OBJS_DIRS))
 	$(info [INFO] Deps dirs      : $(DEPS_DIRS))
 	$(info [INFO] EXEC           : $(EXEC_FILE_PATH))
-
+	$(info [INFO] LIB_DIRS       : $(LIB_DIRS))
+	$(info [INFO] LIBS_PATH      : $(LIBS_PATH))
+	$(info [INFO] LIBS           : $(LIBS))
+	$(info [INFO] LIB_TARGETS    : $(LIB_TARGETS))
+	$(info [INFO] PATH    : $(CURRENT_REAL_PATH))
+	$(info [INFO] LIST    : $(MAKEFILE_LIST))
 clean:
 	$(call REMOVE,$(OBJS_DIRS))
 

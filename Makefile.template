@@ -1,4 +1,24 @@
+#==============================================================================
+#
+# This file serves TWO roles:
+#   1. CONSUMER CONFIG — when included by the root Makefile, it provides
+#      include paths, link libraries, defines, and system dependencies.
+#   2. BUILD CONFIG — when invoked directly ($(MAKE) -f libs/<lib_name>/Makefile),
+#      it additionally sets build-only flags and delegates to Makefile.rules.
+#
+# The MAKEFILE_LIST trick auto-detects which role we're in:
+#   - Direct invocation: we're the first file in MAKEFILE_LIST
+#   - Included by root: root's Makefile is the first file
+#==============================================================================
+
+# Capture our filename before any includes modify MAKEFILE_LIST
+_LAST_MK := $(lastword $(MAKEFILE_LIST))
+_INCLUDED_AS_CONFIG := $(filter $(_LAST_MK),$(firstword $(MAKEFILE_LIST)))
+
+# When invoked directly, load the generic build infrastructure
+ifneq ($(_INCLUDED_AS_CONFIG),)
 include Makefile.vars
+endif
 
 EXEC_NAME := app
 LIB_NAME := mylib
@@ -11,6 +31,12 @@ EXCLUDE_SRCS   ?=
 INCLUDE_DIRS +=
 LIBS_PATH    +=
 DEFINES      +=
+
+#==============================================================================
+# BUILD-ONLY section — everything below only applies when building the
+# lib itself, not when included by the root Makefile for consumer config.
+#==============================================================================
+ifneq ($(_INCLUDED_AS_CONFIG),)
 
 # Compilation flags
 ifeq ($(TARGET),WEB)
@@ -93,7 +119,7 @@ endif
 
 export
 
-.PHONY: all lib run run_cgdb info clean cleanall
+.PHONY: all lib run run_cgdb info clean cleanall build-libs clean-libs cleanall-libs info-libs
 
 all:
 	@$(MAKE) -f Makefile.rules all
@@ -110,11 +136,28 @@ run_valgrind:
 run_cgdb:
 	@$(MAKE) -f Makefile.rules run_cgdb
 
+build-libs:
+	@$(MAKE) -f Makefile.rules build-libs
+
+info-libs:
+	@$(MAKE) -f Makefile.rules info-libs
+
 info:
 	@$(MAKE) -f Makefile.rules info
+
+info-libs:
+	@$(MAKE) -f Makefile.rules info-libs
 
 clean:
 	@$(MAKE) -f Makefile.rules clean
 
 cleanall:
 	@$(MAKE) -f Makefile.rules cleanall
+
+clean-libs:
+	@$(MAKE) -f Makefile.rules clean-libs
+
+cleanall-libs:
+	@$(MAKE) -f Makefile.rules cleanall-libs
+
+endif # _INCLUDED_AS_CONFIG
