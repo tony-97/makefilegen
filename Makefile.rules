@@ -265,6 +265,7 @@ ALIGNED_APK_PATH  := $(PROJECT_BUILD_PATH)/$(PROJECT_NAME).aligned.apk
 ANDROID_BIN_DIR  := $(PROJECT_BUILD_PATH)/bin
 CLASSES_DEX_PATH := $(ANDROID_BIN_DIR)/classes.dex
 
+LIBS_BUILD_STAMP = $(PROJECT_BUILD_PATH)/build_stamp.txt
 LIB_TARGETS = $(foreach LIB,$(LIBS),$(PROJECT_BUILD_PATH)/$(notdir $(LIB)))
 
 # Replace template values: $1 is the Variable Name, $2 is the Text
@@ -355,7 +356,11 @@ endif
 
 lib: $(LIB_FILE_PATH)
 
-build-libs: $(foreach lib,$(LIB_DIRS),build-lib-$(notdir $(lib)))
+build-libs: $(foreach lib,$(LIB_DIRS),build-lib-$(notdir $(lib))) | $(BUILD_PATH)
+
+$(LIBS_BUILD_STAMP): $(foreach lib,$(LIB_DIRS),build-lib-$(notdir $(lib))) | $(BUILD_PATH)
+	$(file > $(LIBS_BUILD_STAMP),)
+
 clean-libs: $(foreach lib,$(LIB_DIRS),clean-lib-$(notdir $(lib)))
 cleanall-libs: $(foreach lib,$(LIB_DIRS),cleanall-lib-$(notdir $(lib)))
 info-libs: $(foreach lib,$(LIB_DIRS),info-lib-$(notdir $(lib)))
@@ -402,9 +407,10 @@ $(foreach lib,$(LIB_DIRS),$(eval $(call LIB_INFO_TEMPLATE ,$(lib))))
 
 # Copy required shared libs for integration into APK
 # NOTE: If using shared libs they are loaded by generated NativeLoader.java
-copy_project_required_libs: $(LIB_TARGETS)
+copy_project_required_libs: $(LIBS_BUILD_STAMP) $(LIB_TARGETS)
+	$(foreach LIB,$(LIBS),$(call COPYFILE,$(LIB),$(PROJECT_BUILD_PATH)/$(notdir $(LIB))))
 
-$(foreach LIB,$(LIBS),$(eval $(call COPY_ANDROID_LIBS,$(LIB))))
+# $(foreach LIB,$(LIBS),$(eval $(call COPY_ANDROID_LIBS,$(LIB))))
 
 # Copy project required resources: strings.xml, icon.png, assets
 # NOTE: Required strings.xml is generated and game resources are copied to assets folder
