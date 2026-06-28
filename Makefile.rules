@@ -1,4 +1,5 @@
 # TODO add CPU architecture for the build path eg obj/x86/ lib/x86 bin/x86
+# TODO add compiled libs path as dependencies of all
 -include $(DEPS)
 
 # Flags to pass to the C compiler
@@ -359,10 +360,10 @@ clean-libs: $(foreach lib,$(LIB_DIRS),clean-lib-$(notdir $(lib)))
 cleanall-libs: $(foreach lib,$(LIB_DIRS),cleanall-lib-$(notdir $(lib)))
 info-libs: $(foreach lib,$(LIB_DIRS),info-lib-$(notdir $(lib)))
 
-$(EXEC_FILE_PATH): build-libs $(OBJS) | $(DEPS)
+$(EXEC_FILE_PATH): $(OBJS) | $(DEPS) build-libs
 	$(call LINK_EXEC,$(LD),$@,$(OBJS),$(LDLIBS),$(LDFLAGS))
 
-$(LIB_FILE_PATH): build-libs $(OBJS) | $(DEPS)
+$(LIB_FILE_PATH): $(OBJS) | $(DEPS) build-libs
 	$(call MK_LIB,$(AR),$(ARFLAGS),$@,$(OBJS))
 
 $(foreach O_DIR,$(OBJS_DIRS),$(eval $(call CREATE_DIR,$(O_DIR))))
