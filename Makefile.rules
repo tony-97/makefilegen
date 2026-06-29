@@ -90,7 +90,7 @@ endef
 # $(1) : The relative source file path (e.g., resources/images/player.png)
 define COPY_RESOURCE_RULE
 $(ANDROID_ASSETS_DIR)/$1: $1
-	$$(call MAKEDIR,$$@)
+	$$(call MAKEDIR,$$(dir $$@))
 	$$(call COPYFILE,$$<,$$@)
 endef
 
@@ -283,6 +283,7 @@ ANDROIDMANIFEST = $(call APPLY_TEMPLATE,APP_COMPANY_NAME,$(call APPLY_TEMPLATE,A
 
 ANDROID_ASSETS_DIR = $(PROJECT_BUILD_PATH)/assets
 
+RESOURCE_SRC_FILES  = $(call FIND,$(PROJECT_RESOURCES_PATH),*)
 RESOURCE_DEST_FILES = $(foreach FILE,$(RESOURCE_SRC_FILES),$(ANDROID_ASSETS_DIR)/$(FILE))
 
 # Sources to compile
